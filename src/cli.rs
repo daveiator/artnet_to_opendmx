@@ -19,6 +19,7 @@ Arguments:
 Options:
   -c  --controller A specific controller to listen to (localhost is 0.0.0.0) (default: all)
   -p  --port       The port to listen to (default: 6454)
+  -n  --name       The name of the node
       --remember   Keep the last dmx values if the art-net connection is lost (default: false)
       --verbose    Print information about the received art-net packets       (default: false)";
 
@@ -65,6 +66,13 @@ impl Cli {
                             return Err("Not enough arguments".into());
                         }
                         options.controller = Some(args2.next().unwrap());
+                        skip = true;
+                    },
+                    "-n" | "--name" => {
+                        if args2.len() < 1 {
+                            return Err("Not enough arguments".into());
+                        }
+                        options.name = Some(args2.next().unwrap());
                         skip = true;
                     },
                     "--remember" => options.remember = true,
@@ -125,6 +133,8 @@ pub struct Options {
     pub port: Option<u16>,
     ///A specific controller to listen to (default: all)
     pub controller: Option<String>,
+    ///The name of the node
+    pub name: Option<String>,
     ///Keep the last dmx values if the art-net connection is lost (default: false)
     pub remember: bool,
     ///Print information about the received art-net packets (default: false)

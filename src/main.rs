@@ -1,14 +1,18 @@
+#![feature(is_some_and)]
+
 mod cli;
 use cli::*;
 
-
 use serialport::{available_ports};
 use open_dmx::DMXSerial;
-use artnet_protocol::{ArtCommand, PortAddress};
+use artnet_protocol::{ArtCommand, PortAddress, PollReply};
 
-use std::net::{UdpSocket, SocketAddr};
+use std::{net::{UdpSocket, SocketAddr, Ipv4Addr}, str::FromStr};
 
 use socket2::{Domain, Socket, Type, Protocol};
+
+use local_ip_address::local_ip;
+
 
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -73,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
             println!("Starting dmx interface...");
-            let mut dmx = match DMXSerial::open(device) {
+            let mut dmx = match DMXSerial::open_sync(device) {
                 Ok(dmx) => dmx,
                 Err(error) => {
                     eprintln!("Couldn't open dmx interface: {}", error);
@@ -81,9 +85,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(1);
                 },
             };
+            if args.options.remember {
+                dmx.set_async();
+            }
             println!("Started!");
             println!("Starting art-net listener...");
-            let address: SocketAddr = format!("{}:{}", args.options.controller.unwrap_or("0.0.0.0".into()), args.options.port.unwrap_or(6454)).parse()?;
+            let address: SocketAddr = format!("{}:{}", args.options.controller.clone().unwrap_or("0.0.0.0".into()), args.options.port.unwrap_or(6454)).parse()?;
             let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
             socket.set_reuse_address(true)?;
             // socket.set_nonblocking(true)?;
@@ -116,18 +123,90 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 match command {
                     ArtCommand::Poll(_) => {
-                        // println!("Received Poll");
-                        //TODO Respond to poll
+                        println!("Received Poll");
+                        if !local_ip().is_ok_and(|ip| ip.is_ipv4()) {
+                            eprintln!("Can't reply to poll request: No IPv4 address found");
+                            continue;
+                        }
+                        if args.options.verbose {
+                            println!("Preparing PollReply");
+                        }
+                        let address = Ipv4Addr::from_str(local_ip().unwrap().to_string().as_str()).unwrap();
+                        let mut short_name = [0; 18];
+                        "artnet2opendmx".bytes().enumerate().for_each(|(i, b)| short_name[i] = b);
+                        let mut long_name = [0; 64];
+                        match &args.options.name {
+                            Some(name) if &name.as_bytes().len() <= &64 => name.clone(),
+                            _ => "artnet_to_opendmx_node".into(),
+                        }.as_bytes().iter().zip(long_name.iter_mut()).for_each(|(a, b)| *b = *a);
+                        let output = match args.options.controller.is_some() {
+                            true => 0x8A,
+                            false => 0x80,
+                        };
+                        let reply = PollReply {
+                            address,
+                            port: args.options.port.unwrap_or(6454),
+                            version: [1, 0],
+                            port_address: args.universe.to_be_bytes(),
+                            oem: [0; 2],
+                            ubea_version: 0,
+                            status_1: 0,
+                            esta_code: 0,
+                            short_name,
+                            long_name,
+                            node_report: [0; 64],
+                            num_ports: [0, 1],
+                            port_types: [0x40, 0, 0, 0],
+                            good_input: [8; 4],
+                            good_output: [output, 0, 0, 0],
+                            swin: [0; 4],
+                            swout: [0; 4],
+                            sw_video: 0,
+                            sw_macro: 0,
+                            sw_remote: 0,
+                            style: 0x00,
+                            mac: [0; 6],
+                            bind_ip: address.octets(),
+                            bind_index: 1,
+                            status_2: 0,
+                            filler: [0; 26],
+                            spare: [0; 3],
+                        };
+                        let reply_bytes = match ArtCommand::PollReply(Box::new(reply)).write_to_buffer() {
+                            Ok(bytes) => bytes,
+                            Err(error) => {
+                                eprintln!("Couldn't write poll reply: {}", error);
+                                continue;
+                            },
+                        };
+                        if args.options.verbose {
+                            println!("Sending poll reply to {}", controller);
+                        }
+                        match socket.send_to(&reply_bytes, controller) {
+                            Ok(_) => {},
+                            Err(error) => {
+                                eprintln!("Couldn't send poll reply: {}", error);
+                                continue;
+                            },
+                        }
                     },
                     ArtCommand::Output(output) => {
                         if output.port_address == PortAddress::try_from(args.universe).unwrap() {
-                            println!("Received output for universe {} from controller {}", args.universe, controller);
+                            if args.options.verbose {
+                                println!("Received output for universe {} from controller {}", args.universe, controller);
+                            }
+                            let mut channels = [0; 512];
+                            _ = output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
+                            dmx.set_channels(channels);
+                                dmx.update();
                         }
-                    }
+                    },
                     _ => {
+                        // if args.options.verbose {
+                        //     println!("Received art-net packet: {:?}", x);
+                        // }
                     }
                 }
-                // std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }   
     }
