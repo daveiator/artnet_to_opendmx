@@ -78,7 +78,7 @@ impl Cli {
                     "--remember" => options.remember = true,
                     "--verbose" => options.verbose = true,
                     _ => {
-                        return Err(format!("Unknown option \"{}\"", arg).into());
+                        return Err(format!("Unknown option \"{arg}\"").into());
                     }
                 }
                 args2.next();
@@ -103,7 +103,7 @@ impl Cli {
                 command: Command::Version,
             }),
             _ => {
-                Err(format!("Unknown command \"{}\"", command).into())
+                Err(format!("Unknown command \"{command}\"").into())
             }
         }
     }

@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = match Cli::parse() {
         Ok(args) => args,
         Err(error) => {
-            eprintln!("Couldn't parse arguments:\n{}", error);
+            eprintln!("Couldn't parse arguments:\n{error}");
             eprintln!("Exiting...");
             std::process::exit(1);
         },
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Available ports:");
             let ports = match available_ports() {
                 Err(error) => {
-                    eprintln!("Coulnd't get available ports list: {}", error);
+                    eprintln!("Coulnd't get available ports list: {error}");
                     eprintln!("Exiting...");
                     std::process::exit(1);
                 },
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         },
         Command::Help =>  {
-            println!("{}", HELP_TEXT);
+            println!("{HELP_TEXT}");
             Ok(())
         },
         Command::Version => {
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            if device == "" {
+            if device.is_empty() {
                 error!("Couldn't find device named \"{}\"", args.device_name);
                 eprintln!("Exiting...");
                 std::process::exit(1);
@@ -146,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "artnet2opendmx".bytes().enumerate().for_each(|(i, b)| short_name[i] = b);
                         let mut long_name = [0; 64];
                         match &args.options.name {
-                            Some(name) if &name.as_bytes().len() <= &64 => name.clone(),
+                            Some(name) if name.as_bytes().len() <= 64 => name.clone(),
                             _ => "artnet_to_opendmx_node".into(),
                         }.as_bytes().iter().zip(long_name.iter_mut()).for_each(|(a, b)| *b = *a);
                         let output = match args.options.controller.is_some() {
@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if output.port_address == PortAddress::try_from(args.universe).unwrap() {
                             debug!("Received output for universe {} from controller {}", args.universe, controller);
                             let mut channels = [0; 512];
-                            _ = output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
+                            output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
                             dmx.set_channels(channels);
                             dmx.update();
                             debug!("Updated dmx channels on interface");
