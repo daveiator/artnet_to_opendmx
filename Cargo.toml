@@ -1,9 +1,14 @@
 [package]
 name = "artnet_to_opendmx"
-version = "0.1.0"
+authors = ["David Bühler"]
 edition = "2021"
+description = "A simple artnet to opendmx bridge"
+repository = "https://github.com/daveiator/artnet_to_opendmx"
+keywords = ["dmx", "serial","open_dmx","lighting", "enttec", "art-net", "artnet", "cli"]
+categories = ["multimedia"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+version = "0.1.0"
 
 [dependencies]
 artnet_protocol = "0.4.1"

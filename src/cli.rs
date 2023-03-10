@@ -2,7 +2,7 @@ use std::env;
 use artnet_protocol::PortAddress;
 
 pub const HELP_TEXT: &str =
-"A tool for controlling an open dmx interface via art-net
+"A simple artnet to opendmx bridge
 
 Usage: artnet_to_opendmx.exe <UNIVERSE> <DEVICE_NAME> [OPTIONS]
        artnet_to_opendmx.exe <COMMAND>
