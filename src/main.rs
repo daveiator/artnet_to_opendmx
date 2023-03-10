@@ -1,117 +1,25 @@
-use serialport::{available_ports, SerialPort};
+mod cli;
+use cli::*;
+
+
+use serialport::{available_ports};
 use open_dmx::DMXSerial;
+use artnet_protocol::{ArtCommand, PortAddress};
 
-use std::env;
+use std::net::{UdpSocket, SocketAddr};
 
-const HELP_TEXT: &str =
-"A tool for controlling an open dmx interface via art-net
+use socket2::{Domain, Socket, Type, Protocol};
 
-Usage: artnet_to_opendmx.exe <UNIVERSE> <DEVICE_NAME> [OPTIONS]
-       artnet_to_opendmx.exe <COMMAND>
 
-Commands:
-  list    List available devices
-  help    Print this message
-  version Print version
-
-Arguments:
-  <UNIVERSE>     The art-net universe to listen to
-  <DEVICE_NAME>  The interface port name
-
-Options:
-      --remember  Keep the last dmx values if the art-net connection is lost (default: false)
-      --verbose   Print information about the received art-net packets       (default: false)";
-
-///A tool for controlling an open dmx interface via art-net
-#[derive(Debug)]
-struct Cli {
-    command: Command,
-}
-
-impl Cli {
-    fn parse() -> Self {
-        let args = env::args().collect::<Vec<String>>();
-        let mut args = args.into_iter();
-        let _ = args.next(); //remove the first argument (the program name)
-        let command = args.next().expect("Not enough arguments");
-        if command.parse::<u16>().is_ok() {
-            //Default Command
-            if args.len() < 1 {
-                eprintln!("Not enough arguments");
-                eprintln!("Exiting...");
-                std::process::exit(1);
-            }
-            let universe = command.parse::<u16>().unwrap();
-            let device_name = args.next().unwrap();
-            //check for options
-            let mut options = Options::default();
-            for arg in args {
-                match arg.as_str() {
-                    "--remember" => options.remember = true,
-                    "--verbose" => options.verbose = true,
-                    _ => {
-                        eprintln!("Unknown option \"{}\"", arg);
-                        eprintln!("Exiting...");
-                        std::process::exit(1);
-                    }
-                }
-            }
-            return Self {
-                command: Command::Default(Arguments {
-                    universe,
-                    device_name,
-                    options,
-                }),
-            }
-        }
-        //Other command
-        match command.as_str() {
-            "list" | "-L" | "-l" | "--list" => Self {
-                command: Command::List,
-            },
-            "help" | "-H" | "-h" | "--help" => Self {
-                command: Command::Help,
-            },
-            "version" | "-V" | "-v" | "--version" => Self {
-                command: Command::Version,
-            },
-            _ => {
-                eprintln!("Unknown command \"{}\"", command);
-                eprintln!("Exiting...");
-                std::process::exit(1);
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-enum Command {
-    List,
-    Help,
-    Version,
-    Default(Arguments),
-}
-
-#[derive(Debug)]
-struct Arguments {
-    ///The art-net universe to listen to
-    universe: u16,
-    ///The interface port name
-    device_name: String,
-    
-    options: Options,
-}
-
-#[derive(Debug, Default)]
-struct Options {
-    ///Keep the last dmx values if the art-net connection is lost (default: false)
-    remember: bool,
-    ///Print information about the received art-net packets (default: false)
-    verbose: bool,
-}
-
-fn main() {
-    let args = Cli::parse();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = match Cli::parse() {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("Couldn't parse arguments:\n{}", error);
+            eprintln!("Exiting...");
+            std::process::exit(1);
+        },
+    };
     match args.command {
         Command::List => {
             println!("Available ports:");
@@ -130,9 +38,16 @@ fn main() {
                 }
                 println!("  - \"{}\"", port.port_name);
             }
+            Ok(())
         },
-        Command::Help => println!("{}", HELP_TEXT),
-        Command::Version => println!("artnet_to_opendmx 0.1.0"),
+        Command::Help =>  {
+            println!("{}", HELP_TEXT);
+            Ok(())
+        },
+        Command::Version => {
+            println!("artnet_to_opendmx 0.1.0");
+            Ok(())
+        },
 
         Command::Default(args) => {
             println!("Checking for device named \"{}\"...", args.device_name);
@@ -166,9 +81,53 @@ fn main() {
                     std::process::exit(1);
                 },
             };
+            println!("Started!");
             println!("Starting art-net listener...");
+            let address: SocketAddr = format!("{}:{}", args.options.controller.unwrap_or("0.0.0.0".into()), args.options.port.unwrap_or(6454)).parse()?;
+            let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+            socket.set_reuse_address(true)?;
+            // socket.set_nonblocking(true)?;
+            socket.bind(&address.into())?;
+            let socket: UdpSocket = socket.into();
+
+            println!("Started!");
+            let mut buffer = [0; 1024];
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                let (length, controller) = match socket.recv_from(&mut buffer) {
+                    Ok(x) => x,
+                    Err(error) => {
+                        if args.options.verbose {
+                            eprintln!("Couldn't receive art-net packet: {}", error);
+                        }
+                        continue;
+                    },
+                };
+                let command = match ArtCommand::from_buffer(&buffer[..length]) {
+                    Ok(command) => command,
+                    Err(error) => {
+                        if args.options.verbose {
+                            eprintln!("Couldn't parse art-net packet: {}", error);
+                        }
+                        continue;
+                    },
+                };
+                if args.options.verbose {
+                    // println!("Received art-net packet: {:?}", command);
+                }
+                match command {
+                    ArtCommand::Poll(_) => {
+                        // println!("Received Poll");
+                        //TODO Respond to poll
+                    },
+                    ArtCommand::Output(output) => {
+                        if output.port_address == PortAddress::try_from(args.universe).unwrap() {
+                            println!("Received output for universe {} from controller {}", args.universe, controller);
+                        }
+                    }
+                    _ => {
+                    }
+                }
+                // std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }   
     }

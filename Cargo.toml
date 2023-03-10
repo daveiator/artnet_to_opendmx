@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 artnet_protocol = "0.4.1"
 clap = { version = "4.1.8", features = ["derive"] }
-open_dmx = "0.1.2"
+open_dmx = "0.1.3"
 serialport = "4.2.0"
+socket2 = { version = "0.5.1", features = ["all"] }
