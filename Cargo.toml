@@ -1,10 +1,11 @@
 [package]
 name = "artnet_to_opendmx"
 authors = ["David Bühler"]
+license = "MIT"
 edition = "2021"
 description = "A simple artnet to opendmx bridge"
 repository = "https://github.com/daveiator/artnet_to_opendmx"
-keywords = ["dmx", "serial","open_dmx","lighting", "enttec", "art-net", "artnet", "cli"]
+keywords = ["dmx","open_dmx","lighting", "artnet", "cli"]
 categories = ["multimedia"]
 
 
