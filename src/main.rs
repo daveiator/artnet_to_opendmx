@@ -3,18 +3,11 @@ use cli::*;
 
 use serialport::{available_ports};
 use open_dmx::DMXSerial;
-use artnet_protocol::{ArtCommand, PortAddress, PollReply};
-
-use std::{net::{UdpSocket, SocketAddr, Ipv4Addr}, str::FromStr};
-
-use socket2::{Domain, Socket, Type, Protocol};
-
-use local_ip_address::local_ip;
+use artnet_protocol::{PortAddress, PollReply};
+use artnet_reciever::ArtnetRecieverBuilder;
 
 use simple_logger::SimpleLogger;
-use log::{info, debug, warn, error};
-
-
+use log::{info, debug, error};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = match Cli::parse() {
@@ -103,126 +96,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             info!("Started!");
             info!("Starting art-net listener...");
-            let address: SocketAddr = format!("{}:{}", args.options.controller.clone().unwrap_or("0.0.0.0".into()), args.options.port.unwrap_or(6454)).parse()?;
-            let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-            socket.set_reuse_address(true)?;
-            // socket.set_nonblocking(true)?;
-            debug!("Binding socket to address: {}:{}", address, args.options.port.unwrap_or(6454));
-            socket.bind(&address.into())?;
-            let socket: UdpSocket = socket.into();
+
+            debug!("Creating art-net poll reply packet...");
+            let output = match args.options.controller.is_some() {
+                true => 0x8A,
+                false => 0x80,
+            };
+            let mut short_name = [0; 18];
+            "artnet2opendmx".bytes().enumerate().for_each(|(i, b)| short_name[i] = b);
+            let mut long_name = [0; 64];
+            match &args.options.name {
+                Some(name) if name.as_bytes().len() <= 64 => name.clone(),
+                _ => "artnet_to_opendmx_node".into(),
+            }.as_bytes().iter().zip(long_name.iter_mut()).for_each(|(a, b)| *b = *a);
+
+            let poll_reply = PollReply {
+                address: [0, 0, 0, 0].into(),
+                port: 0,
+                version: [1, 0],
+                port_address: args.universe.to_be_bytes(),
+                oem: [0; 2],
+                ubea_version: 0,
+                status_1: 0,
+                esta_code: 0,
+                short_name,
+                long_name,
+                node_report: [0; 64],
+                num_ports: [0, 1],
+                port_types: [0x40, 0, 0, 0],
+                good_input: [8; 4],
+                good_output: [output, 0, 0, 0],
+                swin: [0; 4],
+                swout: [0; 4],
+                sw_video: 0,
+                sw_macro: 0,
+                sw_remote: 0,
+                style: 0x00,
+                mac: [0; 6],
+                bind_ip: [0, 0, 0, 0].into(),
+                bind_index: 1,
+                status_2: 0,
+                filler: [0; 26],
+                spare: [0; 3],
+            };
+
+            debug!("Creating art-net reciever...");
+
+            let artnet_output = ArtnetRecieverBuilder::default()
+                .socket_address(format!("{}:{}", args.options.controller.clone().unwrap_or("0.0.0.0".into()), args.options.port.unwrap_or(6454)).parse()?)
+                .poll_reply(poll_reply)
+                .build()?;
 
             info! ("Started!");
-            let mut buffer = [0; 1024];
-            loop {
-                let (length, controller) = match socket.recv_from(&mut buffer) {
-                    Ok(x) => x,
-                    Err(error) => {
-                        warn!("Couldn't receive art-net packet: {}", error);
-                        continue;
-                    },
-                };
-                let command = match ArtCommand::from_buffer(&buffer[..length]) {
-                    Ok(command) => command,
-                    Err(error) => {
-                        warn!("Couldn't parse art-net packet: {}", error);
-                        continue;
-                    },
-                };
-                if args.options.verbose {
-                    // println!("Received art-net packet: {:?}", command);
-                }
-                match command {
-                    ArtCommand::Poll(_) => {
-                        debug!("Received Poll");
-                        if local_ip().is_err() || !local_ip().unwrap().is_ipv4() {
-                            warn!("Can't reply to poll request: No IPv4 address found");
-                            continue;
-                        }
-                        debug!("Preparing PollReply");
-                        let address = Ipv4Addr::from_str(local_ip().unwrap().to_string().as_str()).unwrap();
-                        let mut short_name = [0; 18];
-                        "artnet2opendmx".bytes().enumerate().for_each(|(i, b)| short_name[i] = b);
-                        let mut long_name = [0; 64];
-                        match &args.options.name {
-                            Some(name) if name.as_bytes().len() <= 64 => name.clone(),
-                            _ => "artnet_to_opendmx_node".into(),
-                        }.as_bytes().iter().zip(long_name.iter_mut()).for_each(|(a, b)| *b = *a);
-                        let output = match args.options.controller.is_some() {
-                            true => 0x8A,
-                            false => 0x80,
-                        };
-                        let reply = PollReply {
-                            address,
-                            port: args.options.port.unwrap_or(6454),
-                            version: [1, 0],
-                            port_address: args.universe.to_be_bytes(),
-                            oem: [0; 2],
-                            ubea_version: 0,
-                            status_1: 0,
-                            esta_code: 0,
-                            short_name,
-                            long_name,
-                            node_report: [0; 64],
-                            num_ports: [0, 1],
-                            port_types: [0x40, 0, 0, 0],
-                            good_input: [8; 4],
-                            good_output: [output, 0, 0, 0],
-                            swin: [0; 4],
-                            swout: [0; 4],
-                            sw_video: 0,
-                            sw_macro: 0,
-                            sw_remote: 0,
-                            style: 0x00,
-                            mac: [0; 6],
-                            bind_ip: address.octets(),
-                            bind_index: 1,
-                            status_2: 0,
-                            filler: [0; 26],
-                            spare: [0; 3],
-                        };
-                        let reply_bytes = match ArtCommand::PollReply(Box::new(reply)).write_to_buffer() {
-                            Ok(bytes) => bytes,
-                            Err(error) => {
-                                warn!("Couldn't write poll reply: {}", error);
-                                continue;
-                            },
-                        };
-                        debug!("Sending poll reply to {}", controller);
-                        match socket.send_to(&reply_bytes, controller) {
-                            Ok(_) => {},
-                            Err(error) => {
-                                warn!("Couldn't send poll reply: {}", error);
-                                continue;
-                            },
-                        }
-                    },
-                    ArtCommand::Output(output) => {
-                        if output.port_address == PortAddress::try_from(args.universe).unwrap() {
-                            debug!("Received output for universe {} from controller {}", args.universe, controller);
-                            let mut channels = [0; 512];
-                            output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
-                            dmx.set_channels(channels);
-                            match dmx.update() {
-                                Ok(_) => {},
-                                Err(_) => {
-                                    error!("Couldn't update dmx channels. Interface got disconnected.");
-                                    debug!("Trying to reconnect...");
-                                    if let Err(e) = dmx.reopen() {
-                                        error!("Couldn't reconnect to dmx interface: {}", e);
-                                    }
-                                },
+            
+            for output in artnet_output {
+                if output.port_address == PortAddress::try_from(args.universe).unwrap() {
+                    debug!("Received output for universe {}", args.universe);
+                    let mut channels = [0; 512];
+                    output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
+                    dmx.set_channels(channels);
+                    match dmx.update() {
+                        Ok(_) => {},
+                        Err(_) => {
+                            error!("Couldn't update dmx channels. Interface got disconnected.");
+                            debug!("Trying to reconnect...");
+                            if let Err(e) = dmx.reopen() {
+                                error!("Couldn't reconnect to dmx interface: {}", e);
                             }
-                            debug!("Updated dmx channels on interface");
-                        }
-                    },
-                    ArtCommand::PollReply(_) => {}, // Ignore
-                    _ => {
-                        debug!("Received unimplemented art-net packet, disregarding...");
+                        },
                     }
+                    debug!("Updated dmx channels on interface");
                 }
             }
+            Ok(())
         }   
     }
 }
-
-
