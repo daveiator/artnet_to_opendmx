@@ -1,5 +1,3 @@
-#![feature(is_some_and)]
-
 mod cli;
 use cli::*;
 
@@ -136,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match command {
                     ArtCommand::Poll(_) => {
                         debug!("Received Poll");
-                        if !local_ip().is_ok_and(|ip| ip.is_ipv4()) {
+                        if local_ip().is_err() || !local_ip().unwrap().is_ipv4() {
                             warn!("Can't reply to poll request: No IPv4 address found");
                             continue;
                         }
@@ -204,7 +202,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let mut channels = [0; 512];
                             output.to_bytes()?[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
                             dmx.set_channels(channels);
-                            dmx.update();
+                            match dmx.update() {
+                                Ok(_) => {},
+                                Err(_) => {
+                                    error!("Couldn't update dmx channels. Interface got disconnected.");
+                                    debug!("Trying to reconnect...");
+                                    if let Err(e) = dmx.reopen() {
+                                        error!("Couldn't reconnect to dmx interface: {}", e);
+                                    }
+                                },
+                            }
                             debug!("Updated dmx channels on interface");
                         }
                     },
