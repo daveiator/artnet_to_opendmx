@@ -1,4 +1,4 @@
-# artnet_to_opendmx &emsp; [![Latest Release][crates-io-badge]][crates-io-url] [![Build][build-badge]]()[![License][license-badge]]()
+# artnet_to_opendmx &emsp; [![Latest Release][crates-io-badge]][crates-io-url] [![Build][build-badge]]() [![License][license-badge]]()
 
 [crates-io-badge]: https://img.shields.io/crates/v/artnet_to_opendmx.svg?style=for-the-badge
 [crates-io-url]: https://crates.io/crates/artnet_to_opendmx
