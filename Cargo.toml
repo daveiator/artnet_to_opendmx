@@ -9,14 +9,15 @@ keywords = ["dmx","open_dmx","lighting", "artnet", "cli"]
 categories = ["multimedia"]
 
 
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies]
 artnet_protocol = "0.4.1"
+artnet_reciever = "0.1.0"
 local-ip-address = "0.5.1"
 log = "0.4.17"
 log-panics = { version = "2.1.0" }
-open_dmx = "0.1.3"
+open_dmx = "1.0"
 serialport = "4.2.0"
 simple_logger = "4.0.0"
 socket2 = { version = "0.5.1", features = ["all"] }
