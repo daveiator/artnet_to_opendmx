@@ -1,9 +1,8 @@
-# artnet_to_opendmx &emsp; [![Latest Release][crates-io-badge]][crates-io-url] [![Documentation][docs-rs-img]][docs-rs-url] [![License][license-badge]]()
+# artnet_to_opendmx &emsp; [![Latest Release][crates-io-badge]][crates-io-url] [![Build][build-badge]]()[![License][license-badge]]()
 
 [crates-io-badge]: https://img.shields.io/crates/v/artnet_to_opendmx.svg?style=for-the-badge
 [crates-io-url]: https://crates.io/crates/artnet_to_opendmx
-[docs-rs-img]: https://img.shields.io/docsrs/artnet_to_opendmx?style=for-the-badge
-[docs-rs-url]: https://docs.rs/artnet_to_opendmx
+[build-badge]: https://img.shields.io/github/actions/workflow/status/daveiator/artnet_to_opendmx/build.yml?style=for-the-badge
 [license-badge]: https://img.shields.io/crates/l/artnet_to_opendmx.svg?style=for-the-badge
 
  ### A simple artnet to opendmx bridge
@@ -24,8 +23,8 @@ artnet_to_opendmx.exe <COMMAND>
 
 | __Arguments__ | |
 | - | - |
-| <UNIVERSE> | The art-net universe to listen to |
-| <DEVICE_NAME> | The interface port name |
+| < UNIVERSE > | The art-net universe to listen to |
+| < DEVICE_NAME > | The interface port name |
 
 | __Options__ | | |
 | - | - | - |
