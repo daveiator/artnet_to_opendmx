@@ -115,7 +115,7 @@ impl Command {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Arguments {
     ///The art-net universe to listen to
     pub universe: u16,
@@ -125,7 +125,7 @@ pub struct Arguments {
     pub options: Options,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Options {
     ///The port to listen to (default: 6454)
     pub port: Option<u16>,

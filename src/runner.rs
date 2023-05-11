@@ -1,19 +1,19 @@
 use crate::cli::Arguments;
 
-use std::{sync::mpsc, fmt::{Display, Formatter}};
+use std::{sync::mpsc, fmt::{Display, Formatter}, net::SocketAddr};
 
 use artnet_protocol::{PortAddress, PollReply};
 use artnet_reciever::ArtnetRecieverBuilder;
 use open_dmx::{DMXSerial};
 use serialport::available_ports;
-use log::{info, debug, error};
+use log::{info, debug, warn, error};
 
 
 pub type RunnerUpdateReciever = mpsc::Receiver<RunnerUpdate>;
 
 #[derive(Default, Debug, Clone, Copy)] //all false
 pub struct RunnerUpdate {
-    pub dmx_recieved: bool,
+    pub dmx_recieved: Option<SocketAddr>,
     pub dmx_sent: bool,
     
     pub connected_to_artnet: bool,
@@ -126,17 +126,18 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
         let mut update = RunnerUpdate::default();
         loop {
             update.dmx_sent = false;
+            update.dmx_recieved = None;
 
             if dmx.is_async() {
                 update.dmx_sent = true;
             }
 
             match artnet_output.try_recv() {
-                Ok(output) => {
+                Ok((sender, output)) => {
                     update.connected_to_artnet = true;
                     if output.port_address == PortAddress::try_from(arguments.universe).unwrap() {
-                        update.dmx_recieved = true;
-                        debug!("Received output for universe {}", arguments.universe);
+                        update.dmx_recieved = Some(sender);
+                        debug!("Received output for universe {} from {}", arguments.universe, sender);
                         let mut channels = [0; 512];
                         output.to_bytes().unwrap()[8..].iter().zip(channels.iter_mut()).for_each(|(a, b)| *b = *a);
                         dmx.set_channels(channels);
@@ -170,10 +171,9 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
             update.connected_to_dmx = dmx.check_agent().is_ok();
             match tx.try_send(update) {
                 Ok(_) => {},
-                Err(mpsc::TrySendError::Full(_)) => {
-                },
+                Err(mpsc::TrySendError::Full(_)) => {},
                 Err(mpsc::TrySendError::Disconnected(_)) => {
-                    error!("Update channel disconnected. Stopping runner...");
+                    warn!("Update channel disconnected. Stopping runner...");
                     break;
                 },
             }
