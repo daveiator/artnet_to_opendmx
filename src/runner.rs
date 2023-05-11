@@ -21,7 +21,7 @@ pub struct RunnerUpdate {
 }
 
 pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, RunnerCreationError> {
-    let (tx, rx) = mpsc::sync_channel(1);
+    let (tx, rx) = mpsc::sync_channel(0);
     
     info!("Checking for device named \"{}\"...", arguments.device_name);
     let ports= match available_ports() {
