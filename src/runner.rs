@@ -54,6 +54,10 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
     if arguments.options.remember {
         debug!("Setting dmx interface to remember mode");
         dmx.set_async();
+        dmx.set_channels([0; 512]);
+        if let Err(error) = dmx.update_async() {
+            return Err(RunnerCreationError::DeviceUpdateError(error));
+        }
     }
     info!("Started!");
 
@@ -121,12 +125,10 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
     std::thread::spawn(move || {
         let mut update = RunnerUpdate::default();
         loop {
-            update.dmx_recieved = false;
             update.dmx_sent = false;
 
             if dmx.is_async() {
                 update.dmx_sent = true;
-                update.connected_to_dmx = true;
             }
 
             match artnet_output.try_recv() {
@@ -142,7 +144,6 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
                         match dmx.update() {
                             Ok(_) => {
                                 update.dmx_sent = true;
-                                update.connected_to_dmx = true;
                             },
                             Err(_) => {
                                 error!("Couldn't update dmx channels. Interface got disconnected.");
@@ -150,7 +151,6 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
                                 if let Err(e) = dmx.reopen() {
                                     error!("Couldn't reconnect to dmx interface: {}", e);
                                     update.dmx_sent = false;
-                                    update.connected_to_dmx = false;
                                 }
                             },
                         }
@@ -165,7 +165,9 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
                     error!("Art-net reciever disconnected");
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 },
+
             }
+            update.connected_to_dmx = dmx.check_agent().is_ok();
             match tx.try_send(update) {
                 Ok(_) => {},
                 Err(mpsc::TrySendError::Full(_)) => {
@@ -185,6 +187,7 @@ pub enum RunnerCreationError {
     PortListingError(serialport::Error),
     LocateDeviceError,
     DeviceOpeningError(serial::Error),
+    DeviceUpdateError(open_dmx::error::DMXDisconnectionError),
     ArtnetCreationError(std::io::Error),
 }
 
@@ -194,6 +197,7 @@ impl Display for RunnerCreationError {
             RunnerCreationError::PortListingError(e) => write!(f, "Couldn't list serial ports: {}", e),
             RunnerCreationError::LocateDeviceError => write!(f, "Couldn't find device"),
             RunnerCreationError::DeviceOpeningError(e) => write!(f, "Couldn't open device: {}", e),
+            RunnerCreationError::DeviceUpdateError(e) => write!(f, "Couldn't update device: {}", e),
             RunnerCreationError::ArtnetCreationError(e) => write!(f, "Couldn't create art-net reciever: {}", e),
         }
     }    

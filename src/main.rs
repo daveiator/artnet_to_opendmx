@@ -1,5 +1,5 @@
 mod cli;
-use cli::*;
+use cli::{Command, HELP_TEXT};
 
 mod runner;
 
@@ -8,15 +8,15 @@ use serialport::{available_ports};
 use simple_logger::SimpleLogger;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = match Cli::parse() {
-        Ok(args) => args,
+    let command = match Command::parse() {
+        Ok(command) => command,
         Err(error) => {
             eprintln!("Couldn't parse arguments:\n{error}");
             eprintln!("Exiting...");
             std::process::exit(1);
         },
     };
-    match args.command {
+    match command {
         Command::List => {
             println!("Available ports:");
             let ports = match available_ports() {
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         },
 
-        Command::Default(args) => {
+        Command::Cli(args) => {
             log_panics::init();
             SimpleLogger::new()
                 .with_level(match args.options.verbose {
@@ -67,8 +67,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             for update in runner_update_reciever {
                 println!("Recieved update: {:?}", update);
+                std::thread::sleep_ms(1000);
             }
             Ok(())
-        }   
+        }
+        Command::Gui(argument_option) => {
+            unimplemented!("GUI not implemented yet");
+            Ok(())
+        }
+        _ => {
+            eprintln!("Invalid command");
+            eprintln!("Exiting...");
+            std::process::exit(1);
+        },
     }
 }
