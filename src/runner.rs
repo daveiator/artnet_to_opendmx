@@ -11,7 +11,7 @@ use log::{info, debug, error};
 
 pub type RunnerUpdateReciever = mpsc::Receiver<RunnerUpdate>;
 
-#[derive(Default, Debug, Clone)] //all false
+#[derive(Default, Debug, Clone, Copy)] //all false
 pub struct RunnerUpdate {
     pub dmx_recieved: bool,
     pub dmx_sent: bool,
@@ -119,8 +119,10 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
 
     info! ("Started!");
     std::thread::spawn(move || {
+        let mut update = RunnerUpdate::default();
         loop {
-            let mut update = RunnerUpdate::default();
+            update.dmx_recieved = false;
+            update.dmx_sent = false;
 
             if dmx.is_async() {
                 update.dmx_sent = true;
@@ -140,6 +142,7 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
                         match dmx.update() {
                             Ok(_) => {
                                 update.dmx_sent = true;
+                                update.connected_to_dmx = true;
                             },
                             Err(_) => {
                                 error!("Couldn't update dmx channels. Interface got disconnected.");
@@ -157,18 +160,15 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
                 Err(mpsc::TryRecvError::Empty) => {
                     update.connected_to_artnet = true;
                     std::thread::sleep(std::time::Duration::from_millis(1));
-                    continue;
                 },
                 Err(mpsc::TryRecvError::Disconnected) => {
                     error!("Art-net reciever disconnected");
                     std::thread::sleep(std::time::Duration::from_millis(1));
-                    continue;
                 },
             }
             match tx.try_send(update) {
                 Ok(_) => {},
                 Err(mpsc::TrySendError::Full(_)) => {
-                    debug!("Update channel is full");
                 },
                 Err(mpsc::TrySendError::Disconnected(_)) => {
                     error!("Update channel disconnected. Stopping runner...");
