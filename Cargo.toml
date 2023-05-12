@@ -23,3 +23,7 @@ serial = "0.4.0"
 serialport = "4.2.0"
 simple_logger = "4.0.0"
 socket2 = { version = "0.5.1", features = ["all"] }
+image = "0.24.6"
+
+[build-dependencies]
+winres = "0.1.8"

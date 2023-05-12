@@ -13,19 +13,37 @@ use log::{info, error};
 const WINDOW_SIZE: egui::Vec2 = egui::Vec2::new(350.0, 200.0);
 const SETTINGS_SIZE: egui::Vec2 = egui::Vec2::new(350.0, 300.0);
 
-
-
 pub fn run_app(argument_option: Option<Arguments>) -> Result<(), Box<dyn std::error::Error>> {
+
     let native_options = eframe::NativeOptions{
         decorated: false,
         transparent: true,
         initial_window_size: Some(egui::Vec2::new(350.0, 200.0)),
         resizable: false,
         centered: true,
+        icon_data: Some(load_icon()),
         ..Default::default()
     };
     eframe::run_native("artnet to opendmx", native_options, Box::new(|_| Box::new(App::new(argument_option))))?;
     Ok(())
+}
+
+pub(crate) fn load_icon() -> eframe::IconData {
+	let (icon_rgba, icon_width, icon_height) = {
+		let icon = include_bytes!("../assets/embedded_icon.png");
+		let image = image::load_from_memory(icon)
+			.expect("Failed to open icon path")
+			.into_rgba8();
+		let (width, height) = image.dimensions();
+		let rgba = image.into_raw();
+		(rgba, width, height)
+	};
+	
+	eframe::IconData {
+		rgba: icon_rgba,
+		width: icon_width,
+		height: icon_height,
+	}
 }
 
 struct App {
@@ -410,12 +428,7 @@ impl eframe::App for App {
                             self.stop_runner();
                         }
                     } else {
-                        if ui.add_enabled(self.current_settings.is_some(), if self.gui_error_message.is_empty() {
-                                egui::Button::new("Start").min_size(egui::vec2(50.0, 0.0))
-                            } else {
-                                egui::Button::new(egui::RichText::new(self.gui_error_message.clone()).color(egui::Color32::RED)).min_size(egui::vec2(50.0, 0.0))
-                            }
-                        ).clicked() {
+                        if ui.add(egui::Button::new("Start").min_size(egui::vec2(50.0, 0.0))).clicked() {
                             self.start_runner();
                         }
                     }
@@ -435,7 +448,10 @@ impl eframe::App for App {
                     });
                 });
             });
-            
+            // Error overlay
+            let mut window = egui::Rect { min: egui::pos2(0.0, 0.0), max: WINDOW_SIZE.to_pos2() };
+            window.set_bottom(65.0);
+            ui.put(window, egui::Label::new(egui::RichText::new(self.gui_error_message.clone()).color(egui::Color32::RED)));      
         });
     }
 }
