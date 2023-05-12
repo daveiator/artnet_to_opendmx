@@ -1,12 +1,17 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Ipv4Addr};
 use std::time::Instant;
 
 use crate::cli::Arguments;
-use crate::runner::{self, RunnerUpdateReciever, RunnerCreationError};
+use crate::runner::{self, RunnerUpdateReciever};
 
 use eframe::egui;
 
-use serialport::available_ports;
+use serialport::{available_ports, SerialPortType};
+
+use log::{info, error};
+
+const WINDOW_SIZE: egui::Vec2 = egui::Vec2::new(350.0, 200.0);
+const SETTINGS_SIZE: egui::Vec2 = egui::Vec2::new(350.0, 300.0);
 
 
 
@@ -19,7 +24,7 @@ pub fn run_app(argument_option: Option<Arguments>) -> Result<(), Box<dyn std::er
         centered: true,
         ..Default::default()
     };
-    eframe::run_native("artnet to opendmx", native_options, Box::new(|cc| Box::new(App::new(argument_option))))?;
+    eframe::run_native("artnet to opendmx", native_options, Box::new(|_| Box::new(App::new(argument_option))))?;
     Ok(())
 }
 
@@ -30,8 +35,10 @@ struct App {
     last_packet_instant: Option<std::time::Instant>,
     last_packet: Option<(std::time::Duration, SocketAddr)>,
     current_settings: Option<Arguments>,
-    new_settings: Option<Arguments>,
+    temp_config: Option<TempConfig>,
     settings_window_open: bool,
+    gui_error_message: String,
+    runner_waiting_for_restart: Option<std::time::Instant>,
 
 }
 
@@ -43,26 +50,29 @@ impl App {
             leds: Leds::default(),
             last_packet_instant: None,
             last_packet: None,
-            current_settings: None,
-            new_settings: argument_option,
+            current_settings: argument_option,
+            temp_config: None,
             settings_window_open: false,
+            gui_error_message: String::new(),
+            runner_waiting_for_restart: None,
         }
     }
 
-    fn start_runner(&mut self) -> Result<(), RunnerStartError> {
-        self.runner = match runner::create_runner(match self.new_settings.as_ref() {
+    fn start_runner(&mut self) {
+        self.runner = match runner::create_runner(match self.current_settings.as_ref() {
             Some(args) => args.clone(),
-            None => return Err(RunnerStartError::NoConfig),
+            None => {
+                self.gui_error_message = "Error while starting: No config found".into();
+                return;
+            },
         }) {
             Ok(runner_update_reciever) => Some(runner_update_reciever),
             Err(error) => {
-                return Err(RunnerStartError::RunnerCreationError(error));
-                
+                self.gui_error_message = format!("Error while starting: {}", error);
+                return;               
             },
         };
-        self.current_settings = self.new_settings.clone();
         self.last_packet_instant = Some(Instant::now());
-        Ok(())
     }
 
     fn stop_runner(&mut self) {
@@ -70,6 +80,15 @@ impl App {
         self.leds = Leds::default();
         self.last_packet_instant = None;
         self.last_packet = None;
+    }
+
+    fn restart_runner(&mut self) {
+        if self.runner.is_none() {
+            return;
+        }
+        self.stop_runner();
+        self.runner_waiting_for_restart = Some(Instant::now());
+        
     }
 
     fn status_display(&self, ui: &mut egui::Ui, width: f32) {
@@ -188,10 +207,52 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let mut settings = false;
-        custom_window_frame(ctx, frame, "artnet to opendmx", |ui| {
-            ui.style_mut().animation_time = 20.0;
 
+        let panel_frame = egui::Frame {
+            fill: ctx.style().visuals.window_fill(),
+            rounding: 10.0.into(),
+            stroke: egui::Stroke::NONE,
+            ..Default::default()
+        };
+        egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
+            let app_rect = ui.max_rect();
+            if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
+                frame.drag_window();
+            }
+    
+            let title_bar_height = 32.0;
+            let title_bar_rect = {
+                let mut rect = app_rect;
+                rect.max.y = rect.min.y + title_bar_height;
+                rect
+            };
+            let mut settings_window = false;
+            let title = if self.settings_window_open {
+                "Settings"
+            } else {
+                "artnet2opendmx"
+            };
+            title_bar_ui(ui, frame, title_bar_rect, title, &mut settings_window);
+            if settings_window {
+                self.settings_window_open = true;
+            }
+    
+            // Add the contents:
+            let content_rect = {
+                let mut rect = app_rect;
+                rect.min.y = title_bar_rect.max.y;
+                rect
+            }
+            .shrink(4.0);
+            let mut ui = ui.child_ui(content_rect, *ui.layout());
+
+            //LOGIC
+            if let Some(instant) = &self.runner_waiting_for_restart {
+                if instant.elapsed() > std::time::Duration::from_secs(1) {
+                    self.runner_waiting_for_restart = None;
+                    self.start_runner();
+                }
+            }
             if let Some(runner) = &self.runner {
                 match runner.recv() {
                     Ok(update) => {
@@ -212,8 +273,112 @@ impl eframe::App for App {
                 }
             }
 
+            //SETTINGS
+            if self.settings_window_open {
+                frame.set_window_size(SETTINGS_SIZE);
+
+                if self.temp_config.is_none() {
+                    self.gui_error_message = "".into();
+                    self.temp_config = Some(TempConfig::from(self.current_settings.clone().unwrap_or_default()));
+                }
+
+                let mut temp_config = self.temp_config.clone().unwrap();
+
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    ui.columns(2, |cols| {
+                        cols[0].with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                            ui.label(egui::RichText::new("Art-Net").heading().strong());
+                            ui.separator();
+
+                            ui.label(egui::RichText::new("Node Name:").underline().strong()).on_hover_text("max. 18 Characters");
+                            ui.add(egui::TextEdit::singleline(&mut temp_config.artnet_name).desired_width(150.0));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Controller IP Address:").underline().strong());
+                            ui.checkbox(&mut temp_config.broadcast,"Recieve Broadcast");
+                            ui.add(egui::TextEdit::singleline(&mut temp_config.controller).desired_width(100.0).interactive(!temp_config.broadcast));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Port:").underline().strong()).on_hover_text("0-65535");
+                            ui.add(egui::TextEdit::singleline(&mut temp_config.port).desired_width(50.0));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Universe:").underline().strong()).on_hover_text("0-32787");
+                            ui.add(egui::TextEdit::singleline(&mut temp_config.universe).desired_width(50.0));
+
+                        });
+                        cols[1].with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                            ui.label(egui::RichText::new("Open-DMX").heading().strong());
+                            ui.separator();
+
+                            ui.label(egui::RichText::new("Serial-Port:").underline().strong());
+                            ui.horizontal(|ui| {
+                                ui.style_mut().spacing.item_spacing.x = 0.0;
+                                if ui.add(egui::Button::new(egui::RichText::new("🔄"))).clicked() {
+                                    info!("Refreshing Serial Port List...");
+                                    self.available_ports = serialport::available_ports().unwrap_or_default();
+                                }
+                                egui::ComboBox::from_id_source("serial_port_selection").selected_text(temp_config.serial_name.clone()).width(ui.available_width()-ui.available_height()).show_ui(ui, |ui| {
+                                    for port in self.available_ports.iter() {
+                                        let manufacturer = match &port.port_type {
+                                            SerialPortType::UsbPort(info) => info.manufacturer.clone().unwrap_or("".into()),
+                                            _ => "".into(),
+                                        };
+                                        if temp_config.manufacturer_filter && !manufacturer.to_lowercase().contains("ftdi") {
+                                            continue;
+                                        }
+                                        let port = format!("{}", port.port_name);
+                                        // let port = port.port_name.clone();
+                                        ui.selectable_value(&mut temp_config.serial_name, port.clone(), port);
+                                    }
+                                });
+                            });
+                            ui.checkbox(&mut temp_config.manufacturer_filter, "Only show FTDI Devices");
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("Output:").underline().strong());
+                            ui.checkbox(&mut temp_config.remember,"Remember last values");
+                        });
+                    })
+                });
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
+                    ui.add_space(2.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(2.0);
+                        let cancel_button = ui.add(egui::Button::new(egui::RichText::new("Cancel")));
+                        let apply_button = ui.add(egui::Button::new(egui::RichText::new("Apply")));
+                        ui.label(egui::RichText::new(&self.gui_error_message).color(egui::Color32::RED));
+
+                        self.temp_config = Some(temp_config.clone());
+
+                        if cancel_button.clicked() {
+                            self.settings_window_open = false;
+                            self.temp_config = None;
+                            frame.set_window_size(WINDOW_SIZE);
+                            frame.set_window_title("artnet to opendmx");
+                            self.gui_error_message = "".into();
+                        }
+                        if apply_button.clicked() {
+                            let new_settings: Arguments = match TryInto::try_into(temp_config.clone()) {
+                                Ok(arguments) => arguments,
+                                Err(e) => {
+                                    error!("Error while applying settings: {}", e);
+                                    self.gui_error_message = format!("Error while applying settings: {}", e);
+                                    return;
+                                }
+                            };
+                            // self.current_settings = Some(temp_config.clone());
+                            self.settings_window_open = false;
+                            self.temp_config = None;
+                            frame.set_window_size(WINDOW_SIZE);
+                            frame.set_window_title("artnet to opendmx");
+                            self.gui_error_message = "".into();
+
+                            self.current_settings = Some(new_settings.clone());
+                            self.restart_runner();
+                        }
+                    });
+                });
+                return;
+            }
             
-            
+            //UI
             ui.add_space(10.0);
             ui.columns(3, |cols| {
                 cols[0].with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -233,13 +398,20 @@ impl eframe::App for App {
                 cols[1].with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                     self.status_display(ui, 200.0);
                     ui.add_space(4.0);
-                    if self.runner.is_some() {
+                    if self.runner_waiting_for_restart.is_some() {
+                        ui.add_enabled(false, egui::Button::new("Starting...").min_size(egui::vec2(50.0, 0.0)));
+                    } else if self.runner.is_some() {
                         if ui.add(egui::Button::new("Stop").min_size(egui::vec2(50.0, 0.0))).clicked() {
                             self.stop_runner();
                         }
                     } else {
-                        if ui.add_enabled(self.new_settings.is_some(), egui::Button::new("Start").min_size(egui::vec2(50.0, 0.0))).clicked() {
-                            let _ = self.start_runner(); //TODO
+                        if ui.add_enabled(self.current_settings.is_some(), if self.gui_error_message.is_empty() {
+                                egui::Button::new("Start").min_size(egui::vec2(50.0, 0.0))
+                            } else {
+                                egui::Button::new(egui::RichText::new(self.gui_error_message.clone()).color(egui::Color32::RED)).min_size(egui::vec2(50.0, 0.0))
+                            }
+                        ).clicked() {
+                            self.start_runner();
                         }
                     }
                 });
@@ -263,52 +435,12 @@ impl eframe::App for App {
     }
 }
 
-fn custom_window_frame(
-    ctx: &egui::Context,
-    frame: &mut eframe::Frame,
-    title: &str,
-    add_contents: impl FnOnce(&mut egui::Ui),
-) {
-    use egui::*;
-
-    let panel_frame = egui::Frame {
-        fill: ctx.style().visuals.window_fill(),
-        rounding: 10.0.into(),
-        stroke: egui::Stroke::NONE,
-        ..Default::default()
-    };
-
-    CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
-        let app_rect = ui.max_rect();
-        if ui.interact(app_rect, Id::new("window"), Sense::click()).is_pointer_button_down_on() {
-            frame.drag_window();
-        }
-
-        let title_bar_height = 32.0;
-        let title_bar_rect = {
-            let mut rect = app_rect;
-            rect.max.y = rect.min.y + title_bar_height;
-            rect
-        };
-        title_bar_ui(ui, frame, title_bar_rect, title);
-
-        // Add the contents:
-        let content_rect = {
-            let mut rect = app_rect;
-            rect.min.y = title_bar_rect.max.y;
-            rect
-        }
-        .shrink(4.0);
-        let mut content_ui = ui.child_ui(content_rect, *ui.layout());
-        add_contents(&mut content_ui);
-    });
-}
-
 fn title_bar_ui(
     ui: &mut egui::Ui,
     frame: &mut eframe::Frame,
     title_bar_rect: eframe::epaint::Rect,
     title: &str,
+    settings_open: &mut bool,
 ) {
     use egui::*;
 
@@ -330,8 +462,7 @@ fn title_bar_ui(
             ui.visuals_mut().button_frame = false;
             ui.add_space(8.0);
             let settings_response = ui.add(Button::new(RichText::new("⛭").size(12.0)));
-            if settings_response.clicked() {
-            }
+            *settings_open = settings_response.clicked();
         });
     });
 
@@ -372,15 +503,88 @@ fn signal_lamp(ui: &mut egui::Ui, size: f32, color: egui::Color32, on: bool) {
     ui.painter().circle_filled(rect.center(), size/2.0, color);
 }
 
-enum RunnerStartError {
-    NoConfig,
-    RunnerCreationError(RunnerCreationError),
-}
-
 #[derive(Default)]
 struct Leds {
     link: bool,
     dmx: bool,
     com: bool,
     act: bool,
+}
+
+#[derive(Clone)]
+struct TempConfig {
+    broadcast: bool,
+    controller: String,
+    port: String,
+    universe: String,
+    artnet_name: String,
+    serial_name: String,
+    remember: bool,
+    manufacturer_filter: bool,
+}
+
+impl Default for TempConfig {
+    fn default() -> Self {
+        Self {
+            broadcast: true,
+            controller: "0.0.0.0".into(),
+            port: "6454".into(),
+            universe: "0".into(),
+            artnet_name: "artnet2opendmx".into(),
+            serial_name: "".into(),
+            remember: false,
+            manufacturer_filter: true,
+        }
+    }
+}
+
+impl From<Arguments> for TempConfig {
+    fn from(args: Arguments) -> Self {
+        let mut config = Self::default();
+        if let Some(controller) = args.options.controller {
+            config.controller = controller;
+        } else {
+            config.broadcast = true;
+        }
+        if let Some(port) = args.options.port {
+            config.port = port.to_string();
+        }
+        config.universe = args.universe.to_string();
+        if let Some(artnet_name) = args.options.name {
+            config.artnet_name = artnet_name;
+        }
+        config.serial_name = args.device_name;
+        config.remember = args.options.remember;
+
+        config
+    }
+}
+
+impl TryInto<Arguments> for TempConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<Arguments, Self::Error> {
+        let mut args = Arguments::default();
+        args.universe = self.universe.parse().map_err(|_| "Invalid universe".to_string())?;
+        if args.universe > 32787 {
+            return Err("Universe too high".into());
+        } 
+        args.device_name = self.serial_name; //Can't fail
+        if self.broadcast {
+            args.options.controller = None;
+        } else {
+            let octets = self.controller.split('.').map(|s| s.parse::<u8>()).collect::<Result<Vec<_>, _>>().map_err(|_| "Invalid IP")?; 
+            let ip = Ipv4Addr::try_from([octets[0], octets[1], octets[2], octets[3]]).map_err(|_| "Invalid IP")?;
+            args.options.controller = Some(ip.to_string());
+        }
+        args.options.port = Some(self.port.parse().map_err(|_| "Invalid port".to_string())?);
+
+        if self.artnet_name.bytes().len() > 18 {
+            return Err("Name too long".into());
+        }
+        args.options.name = Some(self.artnet_name);
+        args.options.remember = self.remember;
+
+        Ok(args)
+    }
 }

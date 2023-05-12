@@ -125,6 +125,15 @@ pub struct Arguments {
     pub options: Options,
 }
 
+impl Default for Arguments {
+    fn default() -> Self {
+        Self {
+            universe: 0,
+            device_name: "".into(),
+            options: Options::default(),
+        }
+    }
+}
 #[derive(Debug, Default, Clone)]
 pub struct Options {
     ///The port to listen to (default: 6454)
