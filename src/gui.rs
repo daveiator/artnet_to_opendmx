@@ -44,7 +44,7 @@ struct App {
 
 impl App {
     fn new(argument_option: Option<Arguments>) -> Self {
-        App {
+        let mut app = App {
             available_ports: available_ports().unwrap(),
             runner: None,
             leds: Leds::default(),
@@ -55,7 +55,12 @@ impl App {
             settings_window_open: false,
             gui_error_message: String::new(),
             runner_waiting_for_restart: None,
+        };
+
+        if app.current_settings.is_some() {
+            app.start_runner();
         }
+        app
     }
 
     fn start_runner(&mut self) {
@@ -543,8 +548,7 @@ impl From<Arguments> for TempConfig {
         let mut config = Self::default();
         if let Some(controller) = args.options.controller {
             config.controller = controller;
-        } else {
-            config.broadcast = true;
+            config.broadcast = false;
         }
         if let Some(port) = args.options.port {
             config.port = port.to_string();

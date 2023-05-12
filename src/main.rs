@@ -75,11 +75,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         }
-        _ => {
-            eprintln!("Invalid command");
-            eprintln!("Exiting...");
-            std::process::exit(1);
-        },
+        // TODO: Fix parsing so this is needed again
+        // _ => {
+        //     eprintln!("Invalid command");
+        //     eprintln!("Exiting...");
+        //     std::process::exit(1);
+        // },
     }
 }
 
