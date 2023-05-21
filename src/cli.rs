@@ -25,16 +25,23 @@ Options:
 
 ///A tool for controlling an open dmx interface via art-net
 #[derive(Debug)]
-pub struct Cli {
-    pub command: Command,
+pub enum Command {
+    List,
+    Help,
+    Version,
+    Cli(Arguments),
+    Gui(Option<Arguments>),
 }
 
-impl Cli {
+impl Command {
     pub fn parse() -> Result<Self, Box<dyn std::error::Error>> {
         let args = env::args().collect::<Vec<String>>();
         let mut args = args.into_iter();
         let _ = args.next(); //remove the first argument (the program name)
-        let command = args.next().expect("Not enough arguments");
+        let command = match args.next() {
+            Some(command) => command,
+            None => return Ok(Self::Gui(None)),
+        };
         if command.parse::<u16>().is_ok() {
             //Default Command
             if args.len() < 1 {
@@ -48,6 +55,7 @@ impl Cli {
             let mut args2 = args.clone();
             _ = args2.next();
             let mut skip = false;
+            let mut gui = true;
             for arg in args {
                 if skip {
                     skip = false;
@@ -77,31 +85,29 @@ impl Cli {
                     },
                     "--remember" => options.remember = true,
                     "--verbose" => options.verbose = true,
+                    "--nogui" => gui = false,
                     _ => {
                         return Err(format!("Unknown option \"{arg}\"").into());
                     }
                 }
                 args2.next();
             }
-            return Ok(Self {
-                command: Command::Default(Arguments {
-                    universe,
-                    device_name,
-                    options,
-                })
+            let args = Arguments {
+                universe,
+                device_name,
+                options,
+            };
+            return Ok(if gui {
+                Self::Gui(Some(args))
+            } else {
+                Self::Cli(args)
             });
         }
         //Other command
         match command.as_str() {
-            "list" | "-L" | "-l" | "--list" => Ok(Self {
-                command: Command::List,
-            }),
-            "help" | "-H" | "-h" | "--help" => Ok(Self {
-                command: Command::Help,
-            }),
-            "version" | "-V" | "-v" | "--version" => Ok(Self {
-                command: Command::Version,
-            }),
+            "list" | "-L" | "-l" | "--list" => Ok(Self::List),
+            "help" | "-H" | "-h" | "--help" => Ok(Self::Help),
+            "version" | "-V" | "-v" | "--version" => Ok(Self::Version),
             _ => {
                 Err(format!("Unknown command \"{command}\"").into())
             }
@@ -109,15 +115,7 @@ impl Cli {
     }
 }
 
-#[derive(Debug)]
-pub enum Command {
-    List,
-    Help,
-    Version,
-    Default(Arguments),
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Arguments {
     ///The art-net universe to listen to
     pub universe: u16,
@@ -127,7 +125,16 @@ pub struct Arguments {
     pub options: Options,
 }
 
-#[derive(Debug, Default)]
+impl Default for Arguments {
+    fn default() -> Self {
+        Self {
+            universe: 0,
+            device_name: "".into(),
+            options: Options::default(),
+        }
+    }
+}
+#[derive(Debug, Default, Clone)]
 pub struct Options {
     ///The port to listen to (default: 6454)
     pub port: Option<u16>,

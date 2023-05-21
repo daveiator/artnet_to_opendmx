@@ -7,6 +7,8 @@
 
  ### A simple artnet to opendmx bridge
 
+<img src="assets/logo.svg" width="200" height="200" />
+
 
 ## Usage:
 ```bash
