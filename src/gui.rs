@@ -588,8 +588,11 @@ impl TryInto<Arguments> for TempConfig {
         args.universe = self.universe.parse().map_err(|_| "Invalid universe".to_string())?;
         if args.universe > 32787 {
             return Err("Universe too high".into());
-        } 
-        args.device_name = self.serial_name; //Can't fail
+        }
+        if self.serial_name.is_empty() {
+            return Err("No device selected".into());
+        }
+        args.device_name = self.serial_name;
         if self.broadcast {
             args.options.controller = None;
         } else {
