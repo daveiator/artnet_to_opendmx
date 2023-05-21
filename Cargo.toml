@@ -9,7 +9,7 @@ keywords = ["dmx","open_dmx","lighting", "artnet", "cli"]
 categories = ["multimedia"]
 
 
-version = "0.2.0"
+version = "1.0.0"
 
 [dependencies]
 artnet_protocol = "0.4.1"
