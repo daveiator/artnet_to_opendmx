@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::cli::Arguments;
 use crate::runner::{self, RunnerUpdateReciever};
 
-use eframe::egui;
+use eframe::egui::{self, ViewportCommand};
 
 use serialport::{available_ports, SerialPortType};
 
@@ -16,34 +16,35 @@ const SETTINGS_SIZE: egui::Vec2 = egui::Vec2::new(350.0, 300.0);
 pub fn run_app(argument_option: Option<Arguments>) -> Result<(), Box<dyn std::error::Error>> {
 
     let native_options = eframe::NativeOptions{
-        decorated: false,
-        transparent: true,
-        initial_window_size: Some(egui::Vec2::new(350.0, 200.0)),
-        resizable: false,
         centered: true,
-        icon_data: Some(load_icon()),
+        viewport: egui::ViewportBuilder::default()
+            .with_decorations(false)
+            .with_icon(load_icon())
+            .with_inner_size([350.0, 200.0])
+            .with_resizable(false)
+            .with_transparent(true),
         ..Default::default()
     };
     eframe::run_native("artnet to opendmx", native_options, Box::new(|_| Box::new(App::new(argument_option))))?;
     Ok(())
 }
 
-pub(crate) fn load_icon() -> eframe::IconData {
-	let (icon_rgba, icon_width, icon_height) = {
-		let icon = include_bytes!("../assets/embedded_icon.png");
-		let image = image::load_from_memory(icon)
-			.expect("Failed to open icon path")
-			.into_rgba8();
-		let (width, height) = image.dimensions();
-		let rgba = image.into_raw();
-		(rgba, width, height)
-	};
-	
-	eframe::IconData {
-		rgba: icon_rgba,
-		width: icon_width,
-		height: icon_height,
-	}
+pub(crate) fn load_icon() -> egui::IconData {
+    let (icon_rgba, icon_width, icon_height) = {
+        let icon = include_bytes!("../assets/embedded_icon.png");
+        let image = image::load_from_memory(icon)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+
+    egui::IconData {
+        rgba: icon_rgba,
+        width: icon_width,
+        height: icon_height,
+    }
 }
 
 struct App {
@@ -92,7 +93,7 @@ impl App {
             Ok(runner_update_reciever) => Some(runner_update_reciever),
             Err(error) => {
                 self.gui_error_message = format!("Error while starting: {}", error);
-                return;               
+                return;
             },
         };
         self.last_packet_instant = Some(Instant::now());
@@ -111,7 +112,7 @@ impl App {
         }
         self.stop_runner();
         self.runner_waiting_for_restart = Some(Instant::now());
-        
+
     }
 
     fn status_display(&self, ui: &mut egui::Ui, width: f32) {
@@ -127,7 +128,7 @@ impl App {
 
         let size = egui::vec2(width, width/1.61803398875);
         let (_, mut rect) = ui.allocate_space(size);
-    
+
         ui.painter().rect_filled(rect, width*0.02, fg_color);
         let org_rect = rect.clone();
         rect = rect.shrink(2.0);
@@ -138,7 +139,7 @@ impl App {
         rect.set_top(rect.bottom() + 2.0);
         rect.set_bottom(org_rect.bottom() - 2.0);
         ui.painter().rect_filled(rect, width*0.02, bg_color);
-    
+
         ui.painter().text(
             org_rect.center_top(),
             egui::Align2::CENTER_TOP,
@@ -210,7 +211,7 @@ impl App {
                         fg_color,
                     );
                 }
-                
+
             }
         } else {
             ui.painter().text(
@@ -229,7 +230,7 @@ impl eframe::App for App {
         egui::Rgba::TRANSPARENT.to_array() // Make sure we don't paint anything behind the rounded corners
     }
 
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
         let panel_frame = egui::Frame {
             fill: ctx.style().visuals.window_fill(),
@@ -239,10 +240,10 @@ impl eframe::App for App {
         };
         egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
             let app_rect = ui.max_rect();
-            if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
-                frame.drag_window();
-            }
-    
+            // if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
+            //     ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+            // }
+
             let title_bar_height = 32.0;
             let title_bar_rect = {
                 let mut rect = app_rect;
@@ -255,18 +256,18 @@ impl eframe::App for App {
             } else {
                 "artnet2opendmx"
             };
-            title_bar_ui(ui, frame, title_bar_rect, title, &mut settings_window);
+            title_bar_ui(ui, title_bar_rect, title, &mut settings_window);
             if settings_window {
                 self.settings_window_open = true;
             }
-    
+
             // Add the contents:
             let content_rect = {
                 let mut rect = app_rect;
                 rect.min.y = title_bar_rect.max.y;
                 rect
             }
-            .shrink(4.0);
+                .shrink(4.0);
             let mut ui = ui.child_ui(content_rect, *ui.layout());
 
             //LOGIC
@@ -298,7 +299,7 @@ impl eframe::App for App {
 
             //SETTINGS
             if self.settings_window_open {
-                frame.set_window_size(SETTINGS_SIZE);
+                ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(SETTINGS_SIZE));
 
                 if self.temp_config.is_none() {
                     self.gui_error_message = "".into();
@@ -373,8 +374,8 @@ impl eframe::App for App {
                         if cancel_button.clicked() {
                             self.settings_window_open = false;
                             self.temp_config = None;
-                            frame.set_window_size(WINDOW_SIZE);
-                            frame.set_window_title("artnet to opendmx");
+                            ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(WINDOW_SIZE));
+                            ui.ctx().send_viewport_cmd(ViewportCommand::Title(String::from("artnet to opendmx")));
                             self.gui_error_message = "".into();
                         }
                         if apply_button.clicked() {
@@ -389,8 +390,8 @@ impl eframe::App for App {
                             // self.current_settings = Some(temp_config.clone());
                             self.settings_window_open = false;
                             self.temp_config = None;
-                            frame.set_window_size(WINDOW_SIZE);
-                            frame.set_window_title("artnet to opendmx");
+                            ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(WINDOW_SIZE));
+                            ui.ctx().send_viewport_cmd(ViewportCommand::Title(String::from("artnet to opendmx")));
                             self.gui_error_message = "".into();
 
                             self.current_settings = Some(new_settings.clone());
@@ -400,7 +401,7 @@ impl eframe::App for App {
                 });
                 return;
             }
-            
+
             //UI
             ui.add_space(10.0);
             ui.columns(3, |cols| {
@@ -451,14 +452,13 @@ impl eframe::App for App {
             // Error overlay
             let mut window = egui::Rect { min: egui::pos2(0.0, 0.0), max: WINDOW_SIZE.to_pos2() };
             window.set_bottom(65.0);
-            ui.put(window, egui::Label::new(egui::RichText::new(self.gui_error_message.clone()).color(egui::Color32::RED)));      
+            ui.put(window, egui::Label::new(egui::RichText::new(self.gui_error_message.clone()).color(egui::Color32::RED)));
         });
     }
 }
 
 fn title_bar_ui(
     ui: &mut egui::Ui,
-    frame: &mut eframe::Frame,
     title_bar_rect: eframe::epaint::Rect,
     title: &str,
     settings_open: &mut bool,
@@ -493,24 +493,24 @@ fn title_bar_ui(
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.visuals_mut().button_frame = false;
             ui.add_space(8.0);
-            close_maximize_minimize(ui, frame);
+            close_maximize_minimize(ui);
         });
     });
 }
 
-fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+fn close_maximize_minimize(ui: &mut egui::Ui) {
     use egui::{Button, RichText};
 
     let button_height = 12.0;
 
     let close_response = ui.add(Button::new(RichText::new("❌").size(button_height)));
     if close_response.clicked() {
-        frame.close();
+        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
     }
 
     let minimized_response = ui.add(Button::new(RichText::new("➖").size(button_height)));
     if minimized_response.clicked() {
-        frame.set_minimized(true);
+        ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
     }
 }
 
@@ -596,7 +596,7 @@ impl TryInto<Arguments> for TempConfig {
         if self.broadcast {
             args.options.controller = None;
         } else {
-            let octets = self.controller.split('.').map(|s| s.parse::<u8>()).collect::<Result<Vec<_>, _>>().map_err(|_| "Invalid IP")?; 
+            let octets = self.controller.split('.').map(|s| s.parse::<u8>()).collect::<Result<Vec<_>, _>>().map_err(|_| "Invalid IP")?;
             let ip = Ipv4Addr::try_from([octets[0], octets[1], octets[2], octets[3]]).map_err(|_| "Invalid IP")?;
             args.options.controller = Some(ip.to_string());
         }
