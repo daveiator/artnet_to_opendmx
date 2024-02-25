@@ -240,9 +240,9 @@ impl eframe::App for App {
         };
         egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
             let app_rect = ui.max_rect();
-            // if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
-            //     ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
-            // }
+            if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
+                ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+            }
 
             let title_bar_height = 32.0;
             let title_bar_rect = {
