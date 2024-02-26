@@ -239,6 +239,9 @@ impl eframe::App for App {
             ..Default::default()
         };
         egui::CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
+
+            ui.style_mut().interaction.selectable_labels = false;
+            
             let app_rect = ui.max_rect();
             if ui.interact(app_rect, egui::Id::new("window"), egui::Sense::click()).is_pointer_button_down_on() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
