@@ -4,7 +4,7 @@ use std::{sync::mpsc, fmt::{Display, Formatter}, net::SocketAddr};
 
 use artnet_protocol::{PortAddress, PollReply};
 use artnet_reciever::ArtnetRecieverBuilder;
-use open_dmx::{DMXSerial};
+use open_dmx::DMXSerial;
 use serialport::available_ports;
 use log::{info, debug, warn, error};
 
@@ -186,7 +186,7 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
 pub enum RunnerCreationError {
     PortListingError(serialport::Error),
     LocateDeviceError,
-    DeviceOpeningError(serial::Error),
+    DeviceOpeningError(serialport::Error),
     DeviceUpdateError(open_dmx::error::DMXDisconnectionError),
     ArtnetCreationError(std::io::Error),
 }
