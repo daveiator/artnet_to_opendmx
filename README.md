@@ -35,6 +35,7 @@ artnet_to_opendmx.exe <COMMAND>
 | -n | --name | The name of the node |
 | | --remember | Keep the last dmx values if the art-net connection is lost (default: false) |
 | | --verbose | Print information about the received art-net packets       (default: false) |
+| | --nogui | Disable the GUI (default: false) |
 
 _Should work cross-platform, but only tested on Windows._
 

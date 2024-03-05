@@ -21,7 +21,8 @@ Options:
   -p  --port       The port to listen to (default: 6454)
   -n  --name       The name of the node
       --remember   Keep the last dmx values if the art-net connection is lost (default: false)
-      --verbose    Print information about the received art-net packets       (default: false)";
+      --verbose    Print information about the received art-net packets       (default: false)
+      --nogui      Disable the GUI (default: false)";
 
 ///A tool for controlling an open dmx interface via art-net
 #[derive(Debug)]
