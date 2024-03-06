@@ -56,6 +56,7 @@ struct App {
     current_settings: Option<Arguments>,
     temp_config: Option<TempConfig>,
     settings_window_open: bool,
+    manufacturer_filter: bool,
     gui_error_message: String,
     runner_waiting_for_restart: Option<std::time::Instant>,
 
@@ -72,6 +73,7 @@ impl App {
             current_settings: argument_option,
             temp_config: None,
             settings_window_open: false,
+            manufacturer_filter: true,
             gui_error_message: String::new(),
             runner_waiting_for_restart: None,
         };
@@ -349,7 +351,7 @@ impl eframe::App for App {
                                             SerialPortType::UsbPort(info) => info.manufacturer.clone().unwrap_or("".into()),
                                             _ => "".into(),
                                         };
-                                        if temp_config.manufacturer_filter && !manufacturer.to_lowercase().contains("ftdi") {
+                                        if self.manufacturer_filter && !manufacturer.to_lowercase().contains("ftdi") {
                                             continue;
                                         }
                                         let port = format!("{}", port.port_name);
@@ -358,7 +360,7 @@ impl eframe::App for App {
                                     }
                                 });
                             });
-                            ui.checkbox(&mut temp_config.manufacturer_filter, "Only show FTDI Devices");
+                            ui.checkbox(&mut self.manufacturer_filter, "Only show FTDI Devices");
                             ui.add_space(10.0);
                             ui.label(egui::RichText::new("Output:").underline().strong());
                             ui.checkbox(&mut temp_config.custom_break_time, "Custom Break Time");
@@ -554,7 +556,7 @@ struct TempConfig {
     custom_break_time: bool,
     break_time: String,
     remember: bool,
-    manufacturer_filter: bool,
+    
 }
 
 impl Default for TempConfig {
@@ -569,7 +571,6 @@ impl Default for TempConfig {
             custom_break_time: false,
             break_time: "".into(),
             remember: false,
-            manufacturer_filter: true,
         }
     }
 }
@@ -623,6 +624,7 @@ impl TryInto<Arguments> for TempConfig {
             return Err("Name too long".into());
         }
         args.options.name = Some(self.artnet_name);
+        args.options.break_time = self.break_time.parse().ok().map(|time| std::time::Duration::from_millis(time));
         args.options.remember = self.remember;
 
         Ok(args)
