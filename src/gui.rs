@@ -5,6 +5,8 @@ use std::time::Instant;
 use crate::cli::Arguments;
 use crate::runner::{self, RunnerUpdateReciever};
 
+use crate::CARGO_PKG_VERSION;
+
 use eframe::egui::{self, ViewportCommand};
 
 use serialport::{available_ports, SerialPortType};
@@ -383,6 +385,12 @@ impl eframe::App for App {
                         let cancel_button = ui.add(egui::Button::new(egui::RichText::new("Cancel")));
                         let apply_button = ui.add(egui::Button::new(egui::RichText::new("Apply")));
                         ui.label(egui::RichText::new(&self.gui_error_message).color(egui::Color32::RED));
+                        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                            ui.horizontal(|ui| {
+                                ui.add_space(6.0);
+                                ui.label(egui::RichText::new(format!("v{}", CARGO_PKG_VERSION)).small());
+                            });
+                        });
 
                         self.temp_config = Some(temp_config.clone());
 
