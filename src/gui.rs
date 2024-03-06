@@ -626,7 +626,11 @@ impl TryInto<Arguments> for TempConfig {
             return Err("Name too long".into());
         }
         args.options.name = Some(self.artnet_name);
-        args.options.break_time = self.break_time.parse().ok().map(|time| std::time::Duration::from_millis(time));
+        if self.custom_break_time {
+            args.options.break_time = Some(std::time::Duration::from_millis(self.break_time.parse().map_err(|_| "Invalid break time".to_string())?));
+        } else {
+            args.options.break_time = None;
+        }
         args.options.remember = self.remember;
 
         Ok(args)
