@@ -51,5 +51,18 @@ artnet_to_opendmx.exe 0 COM4 --name "Interface1" --remember --verbose
 artnet_to_opendmx.exe list
 ```
 
+## Troubleshooting
+* **Settings-Window has scaling issues**
+    
+    Check if the application has the permission to scale the window. This should only be a problem on linux.
+
+* **Flickering DMX output**
+    
+    If the DMX output flickers, try to increase the break time. This can happen if the DMX-Interface is not able to handle the data rate.
+
+* **Anything else?**
+
+    Please open an issue if you encounter any other problems.
+
 ## Contributions
 Contributions are welcome! If you have something that could improve the program, please open an issue or a pull request.
