@@ -9,6 +9,9 @@
 
 <img src="assets/logo.svg" width="200" height="200" />
 
+<br>
+
+**Works with both COM- and /dev/tty-Ports.**
 
 ## Usage:
 ```bash
@@ -37,8 +40,6 @@ artnet_to_opendmx.exe <COMMAND>
 | -r | --remember | Keep the last dmx values if the art-net connection is lost (default: false) |
 | | --verbose | Print information about the received art-net packets       (default: false) |
 | | --nogui | Disable the GUI (default: false) |
-
-_Should work cross-platform, but only tested on Windows._
 
 ## Example:
 #### Opens a bridge named "Interface1" on universe 0 and the device COM4
