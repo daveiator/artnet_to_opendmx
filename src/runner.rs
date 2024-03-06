@@ -1,6 +1,6 @@
 use crate::cli::Arguments;
 
-use std::{sync::mpsc, fmt::{Display, Formatter}, net::SocketAddr};
+use std::{fmt::{Display, Formatter}, net::SocketAddr, sync::mpsc};
 
 use artnet_protocol::{PortAddress, PollReply};
 use artnet_reciever::ArtnetRecieverBuilder;
@@ -51,6 +51,10 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
             return Err(RunnerCreationError::DeviceOpeningError(error));
         },
     };
+    if let Some(time) = arguments.options.break_time {
+        debug!("Setting dmx interface break time to {}ms", time.as_millis());
+        dmx.set_packet_time(time);
+    }
     if arguments.options.remember {
         debug!("Setting dmx interface to remember mode");
         dmx.set_async();

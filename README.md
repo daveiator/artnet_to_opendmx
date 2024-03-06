@@ -33,7 +33,8 @@ artnet_to_opendmx.exe <COMMAND>
 | -c | --controller | A specific controller to listen to (localhost is 0.0.0.0) (default: all) |
 | -p | --port | The port to listen to (default: 6454) |
 | -n | --name | The name of the node |
-| | --remember | Keep the last dmx values if the art-net connection is lost (default: false) |
+| -b | --break | The minimum time in milliseconds between two dmx packets (default: 25) |
+| -r | --remember | Keep the last dmx values if the art-net connection is lost (default: false) |
 | | --verbose | Print information about the received art-net packets       (default: false) |
 | | --nogui | Disable the GUI (default: false) |
 
