@@ -1,4 +1,5 @@
 use std::net::{SocketAddr, Ipv4Addr};
+use std::sync::mpsc::TryRecvError;
 use std::time::Instant;
 
 use crate::cli::Arguments;
@@ -233,7 +234,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         let panel_frame = egui::Frame {
             fill: ctx.style().visuals.window_fill(),
             rounding: 10.0.into(),
@@ -284,7 +284,7 @@ impl eframe::App for App {
                 }
             }
             if let Some(runner) = &self.runner {
-                match runner.recv() {
+                match runner.try_recv() {
                     Ok(update) => {
                         self.leds.link = update.connected_to_artnet;
                         self.leds.dmx = update.dmx_recieved.is_some();
@@ -297,12 +297,14 @@ impl eframe::App for App {
                         }
                         ctx.request_repaint();
                     },
+                    Err(TryRecvError::Empty) => {
+                        ctx.request_repaint();
+                    },
                     Err(_) => {
                         self.stop_runner()
                     },
                 }
             }
-
             //SETTINGS
             if self.settings_window_open {
                 
