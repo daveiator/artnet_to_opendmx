@@ -361,6 +361,13 @@ impl eframe::App for App {
                             ui.checkbox(&mut temp_config.manufacturer_filter, "Only show FTDI Devices");
                             ui.add_space(10.0);
                             ui.label(egui::RichText::new("Output:").underline().strong());
+                            ui.checkbox(&mut temp_config.custom_break_time, "Custom Break Time");
+                            if temp_config.custom_break_time {
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(&mut temp_config.break_time).desired_width(20.0));
+                                    ui.label(egui::RichText::new("ms"));
+                                });
+                            }
                             ui.checkbox(&mut temp_config.remember,"Remember last values");
                         });
                     })
@@ -544,6 +551,8 @@ struct TempConfig {
     universe: String,
     artnet_name: String,
     serial_name: String,
+    custom_break_time: bool,
+    break_time: String,
     remember: bool,
     manufacturer_filter: bool,
 }
@@ -557,6 +566,8 @@ impl Default for TempConfig {
             universe: "0".into(),
             artnet_name: "artnet2opendmx".into(),
             serial_name: "".into(),
+            custom_break_time: false,
+            break_time: "".into(),
             remember: false,
             manufacturer_filter: true,
         }
@@ -578,6 +589,8 @@ impl From<Arguments> for TempConfig {
             config.artnet_name = artnet_name;
         }
         config.serial_name = args.device_name;
+        config.custom_break_time = args.options.break_time.is_some();
+        config.break_time = args.options.break_time.map(|time| time.as_millis().to_string()).unwrap_or("25".into());
         config.remember = args.options.remember;
 
         config
