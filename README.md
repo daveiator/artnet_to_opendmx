@@ -67,5 +67,9 @@ artnet_to_opendmx.exe list
 
     Please open an issue if you encounter any other problems.
 
+## Building
+
+Make sure to install the dependencies listed in `dependencies.txt` before building the project.
+
 ## Contributions
 Contributions are welcome! If you have something that could improve the program, please open an issue or a pull request.
