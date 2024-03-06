@@ -1,8 +1,11 @@
 use std::net::{SocketAddr, Ipv4Addr};
+use std::sync::mpsc::TryRecvError;
 use std::time::Instant;
 
 use crate::cli::Arguments;
 use crate::runner::{self, RunnerUpdateReciever};
+
+use crate::CARGO_PKG_VERSION;
 
 use eframe::egui::{self, ViewportCommand};
 
@@ -56,6 +59,7 @@ struct App {
     current_settings: Option<Arguments>,
     temp_config: Option<TempConfig>,
     settings_window_open: bool,
+    manufacturer_filter: bool,
     gui_error_message: String,
     runner_waiting_for_restart: Option<std::time::Instant>,
 
@@ -72,6 +76,7 @@ impl App {
             current_settings: argument_option,
             temp_config: None,
             settings_window_open: false,
+            manufacturer_filter: true,
             gui_error_message: String::new(),
             runner_waiting_for_restart: None,
         };
@@ -231,7 +236,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         let panel_frame = egui::Frame {
             fill: ctx.style().visuals.window_fill(),
             rounding: 10.0.into(),
@@ -261,6 +265,7 @@ impl eframe::App for App {
             };
             title_bar_ui(ui, title_bar_rect, title, &mut settings_window);
             if settings_window {
+                ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(SETTINGS_SIZE));
                 self.settings_window_open = true;
             }
 
@@ -281,7 +286,7 @@ impl eframe::App for App {
                 }
             }
             if let Some(runner) = &self.runner {
-                match runner.recv() {
+                match runner.try_recv() {
                     Ok(update) => {
                         self.leds.link = update.connected_to_artnet;
                         self.leds.dmx = update.dmx_recieved.is_some();
@@ -294,15 +299,17 @@ impl eframe::App for App {
                         }
                         ctx.request_repaint();
                     },
+                    Err(TryRecvError::Empty) => {
+                        ctx.request_repaint();
+                    },
                     Err(_) => {
                         self.stop_runner()
                     },
                 }
             }
-
             //SETTINGS
             if self.settings_window_open {
-                ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(SETTINGS_SIZE));
+                
 
                 if self.temp_config.is_none() {
                     self.gui_error_message = "".into();
@@ -348,7 +355,7 @@ impl eframe::App for App {
                                             SerialPortType::UsbPort(info) => info.manufacturer.clone().unwrap_or("".into()),
                                             _ => "".into(),
                                         };
-                                        if temp_config.manufacturer_filter && !manufacturer.to_lowercase().contains("ftdi") {
+                                        if self.manufacturer_filter && !manufacturer.to_lowercase().contains("ftdi") {
                                             continue;
                                         }
                                         let port = format!("{}", port.port_name);
@@ -357,9 +364,16 @@ impl eframe::App for App {
                                     }
                                 });
                             });
-                            ui.checkbox(&mut temp_config.manufacturer_filter, "Only show FTDI Devices");
+                            ui.checkbox(&mut self.manufacturer_filter, "Only show FTDI Devices");
                             ui.add_space(10.0);
                             ui.label(egui::RichText::new("Output:").underline().strong());
+                            ui.checkbox(&mut temp_config.custom_break_time, "Custom Break Time");
+                            if temp_config.custom_break_time {
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(&mut temp_config.break_time).desired_width(20.0));
+                                    ui.label(egui::RichText::new("ms"));
+                                });
+                            }
                             ui.checkbox(&mut temp_config.remember,"Remember last values");
                         });
                     })
@@ -371,6 +385,12 @@ impl eframe::App for App {
                         let cancel_button = ui.add(egui::Button::new(egui::RichText::new("Cancel")));
                         let apply_button = ui.add(egui::Button::new(egui::RichText::new("Apply")));
                         ui.label(egui::RichText::new(&self.gui_error_message).color(egui::Color32::RED));
+                        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                            ui.horizontal(|ui| {
+                                ui.add_space(6.0);
+                                ui.label(egui::RichText::new(format!("v{}", CARGO_PKG_VERSION)).small());
+                            });
+                        });
 
                         self.temp_config = Some(temp_config.clone());
 
@@ -543,8 +563,10 @@ struct TempConfig {
     universe: String,
     artnet_name: String,
     serial_name: String,
+    custom_break_time: bool,
+    break_time: String,
     remember: bool,
-    manufacturer_filter: bool,
+    
 }
 
 impl Default for TempConfig {
@@ -556,8 +578,9 @@ impl Default for TempConfig {
             universe: "0".into(),
             artnet_name: "artnet2opendmx".into(),
             serial_name: "".into(),
+            custom_break_time: false,
+            break_time: "".into(),
             remember: false,
-            manufacturer_filter: true,
         }
     }
 }
@@ -577,6 +600,8 @@ impl From<Arguments> for TempConfig {
             config.artnet_name = artnet_name;
         }
         config.serial_name = args.device_name;
+        config.custom_break_time = args.options.break_time.is_some();
+        config.break_time = args.options.break_time.map(|time| time.as_millis().to_string()).unwrap_or("25".into());
         config.remember = args.options.remember;
 
         config
@@ -609,6 +634,11 @@ impl TryInto<Arguments> for TempConfig {
             return Err("Name too long".into());
         }
         args.options.name = Some(self.artnet_name);
+        if self.custom_break_time {
+            args.options.break_time = Some(std::time::Duration::from_millis(self.break_time.parse().map_err(|_| "Invalid break time".to_string())?));
+        } else {
+            args.options.break_time = None;
+        }
         args.options.remember = self.remember;
 
         Ok(args)

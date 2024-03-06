@@ -12,6 +12,8 @@ use serialport::available_ports;
 
 use simple_logger::SimpleLogger;
 
+const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = match Command::parse() {
         Ok(command) => command,
@@ -46,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         },
         Command::Version => {
-            println!("artnet_to_opendmx 0.1.0");
+            println!("artnet_to_opendmx {}", CARGO_PKG_VERSION);
             Ok(())
         },
 

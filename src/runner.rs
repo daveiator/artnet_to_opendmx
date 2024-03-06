@@ -1,10 +1,10 @@
 use crate::cli::Arguments;
 
-use std::{sync::mpsc, fmt::{Display, Formatter}, net::SocketAddr};
+use std::{fmt::{Display, Formatter}, net::SocketAddr, sync::mpsc};
 
 use artnet_protocol::{PortAddress, PollReply};
 use artnet_reciever::ArtnetRecieverBuilder;
-use open_dmx::{DMXSerial};
+use open_dmx::DMXSerial;
 use serialport::available_ports;
 use log::{info, debug, warn, error};
 
@@ -21,7 +21,7 @@ pub struct RunnerUpdate {
 }
 
 pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, RunnerCreationError> {
-    let (tx, rx) = mpsc::sync_channel(0);
+    let (tx, rx) = mpsc::sync_channel(1);
     
     info!("Checking for device named \"{}\"...", arguments.device_name);
     let ports= match available_ports() {
@@ -51,6 +51,10 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
             return Err(RunnerCreationError::DeviceOpeningError(error));
         },
     };
+    if let Some(time) = arguments.options.break_time {
+        debug!("Setting dmx interface break time to {}ms", time.as_millis());
+        dmx.set_packet_time(time);
+    }
     if arguments.options.remember {
         debug!("Setting dmx interface to remember mode");
         dmx.set_async();
@@ -186,7 +190,7 @@ pub fn create_runner(arguments: Arguments) -> Result<RunnerUpdateReciever, Runne
 pub enum RunnerCreationError {
     PortListingError(serialport::Error),
     LocateDeviceError,
-    DeviceOpeningError(serial::Error),
+    DeviceOpeningError(serialport::Error),
     DeviceUpdateError(open_dmx::error::DMXDisconnectionError),
     ArtnetCreationError(std::io::Error),
 }

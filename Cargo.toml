@@ -18,8 +18,7 @@ eframe = "0.26.2"
 local-ip-address = "0.6.0"
 log = "0.4.20"
 log-panics = { version = "2.1.0" }
-open_dmx = "1.0.1"
-serial = "0.4.0"
+open_dmx = "1.1.1"
 serialport = "4.3.0"
 simple_logger = "4.3.3"
 socket2 = { version = "0.5.6", features = ["all"] }

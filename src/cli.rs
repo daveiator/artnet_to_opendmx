@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 use artnet_protocol::PortAddress;
 
 pub const HELP_TEXT: &str =
@@ -17,11 +17,13 @@ Arguments:
   <DEVICE_NAME>  The interface port name
 
 Options:
-  -c  --controller A specific controller to listen to (localhost is 0.0.0.0) (default: all)
-  -p  --port       The port to listen to (default: 6454)
+  -c  --controller A specific controller to listen to (localhost is 0.0.0.0)  (default: all)
+  -p  --port       The port to listen to                                      (default: 6454)
   -n  --name       The name of the node
-      --remember   Keep the last dmx values if the art-net connection is lost (default: false)
-      --verbose    Print information about the received art-net packets       (default: false)";
+  -b  --break      The minimum time in milliseconds between two dmx packets   (default: 25)
+  -r  --remember   Keep the last dmx values if the art-net connection is lost (default: false)
+      --verbose    Print information about the received art-net packets       (default: false)
+      --nogui      Disable the GUI                                            (default: false)";
 
 ///A tool for controlling an open dmx interface via art-net
 #[derive(Debug)]
@@ -83,7 +85,14 @@ impl Command {
                         options.name = Some(args2.next().unwrap());
                         skip = true;
                     },
-                    "--remember" => options.remember = true,
+                    "-b" | "--break" => {
+                        if args2.len() < 1 {
+                            return Err("Not enough arguments".into());
+                        }
+                        options.break_time = Some(Duration::from_millis(args2.next().unwrap().parse::<u64>()?));
+                        skip = true;
+                    },
+                    "-r" | "--remember" => options.remember = true,
                     "--verbose" => options.verbose = true,
                     "--nogui" => gui = false,
                     _ => {
@@ -142,6 +151,8 @@ pub struct Options {
     pub controller: Option<String>,
     ///The name of the node
     pub name: Option<String>,
+    ///The minimum time in milliseconds between two dmx packets (default: 25)
+    pub break_time: Option<Duration>,
     ///Keep the last dmx values if the art-net connection is lost (default: false)
     pub remember: bool,
     ///Print information about the received art-net packets (default: false)
