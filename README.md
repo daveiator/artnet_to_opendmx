@@ -60,6 +60,8 @@ artnet_to_opendmx.exe list
     
     If the DMX output flickers, try to increase the break time. This can happen if the DMX-Interface is not able to handle the data rate.
 
+    If multiple senders are sending data to the same universe, the data might interfere. Try to set the controller option to a specific sender.
+
 * **Anything else?**
 
     Please open an issue if you encounter any other problems.
