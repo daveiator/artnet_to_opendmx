@@ -261,6 +261,7 @@ impl eframe::App for App {
             };
             title_bar_ui(ui, title_bar_rect, title, &mut settings_window);
             if settings_window {
+                ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(SETTINGS_SIZE));
                 self.settings_window_open = true;
             }
 
@@ -302,7 +303,7 @@ impl eframe::App for App {
 
             //SETTINGS
             if self.settings_window_open {
-                ui.ctx().send_viewport_cmd(ViewportCommand::InnerSize(SETTINGS_SIZE));
+                
 
                 if self.temp_config.is_none() {
                     self.gui_error_message = "".into();
